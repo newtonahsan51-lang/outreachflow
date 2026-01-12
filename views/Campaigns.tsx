@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   Plus, Play, Pause, Trash2, Eye, MoreHorizontal, 
   Mail, Clock, MousePointer, MessageSquare, PlusCircle,
   ArrowRight, Sparkles, AlertCircle, ChevronDown, 
   GitBranch, Zap, Layers, X, Target, Info, Linkedin, ShieldCheck,
-  RotateCw, Check, CheckCircle2, FileText, Settings, Copy, Share2
+  RotateCw, Check, CheckCircle2, FileText, Settings, Copy, Share2, Loader2
 } from 'lucide-react';
 
 const mockCampaigns = [
@@ -39,14 +40,24 @@ const PRESET_FLOWS = [
 ];
 
 const Campaigns = () => {
+  const location = useLocation();
   const [view, setView] = useState<'list' | 'presets' | 'builder'>('list');
+  const [initialTemplate, setInitialTemplate] = useState<any>(null);
+
+  useEffect(() => {
+    if (location.state?.template) {
+      setInitialTemplate(location.state.template);
+      setView('builder');
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   if (view === 'presets') {
     return <PresetFlowSelection onSelect={() => setView('builder')} onCancel={() => setView('list')} />;
   }
 
   if (view === 'builder') {
-    return <CampaignBuilder onCancel={() => setView('list')} />;
+    return <CampaignBuilder initialTemplate={initialTemplate} onCancel={() => { setView('list'); setInitialTemplate(null); }} />;
   }
 
   return (
@@ -149,12 +160,18 @@ const PresetFlowSelection = ({ onSelect, onCancel }: { onSelect: () => void, onC
   );
 };
 
-const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
-  const [steps, setSteps] = useState([
-    { id: '1', type: 'Email', subject: 'Initial Discovery', content: 'Hi {{first_name}},\n\nSaw your team at {{company_name}} is growing...', condition: null },
-    { id: '2', type: 'Wait', delayDays: 2, condition: 'If not replied' },
-    { id: '3', type: 'Email', subject: 'Quick follow up', content: 'Just circling back on my last email...', condition: 'If opened' },
-    { id: '4', type: 'LinkedIn', content: 'Hey {{first_name}}, sent you an email a few days ago. Love what you are doing with...', condition: 'If opened' }
+const CampaignBuilder = ({ onCancel, initialTemplate }: { onCancel: () => void, initialTemplate?: any }) => {
+  const [steps, setSteps] = useState<any[]>([
+    { 
+      id: Math.random().toString(36).substr(2, 9), 
+      type: 'Email', 
+      subject: initialTemplate?.subject || 'Initial Discovery', 
+      content: initialTemplate?.body || 'Hi {{first_name}},\n\nSaw your team at {{company_name}} is growing...', 
+      condition: null 
+    },
+    { id: Math.random().toString(36).substr(2, 9), type: 'Wait', delayDays: 2, condition: 'If not replied' },
+    { id: Math.random().toString(36).substr(2, 9), type: 'Email', subject: 'Quick follow up', content: 'Just circling back on my last email...', condition: 'If opened' },
+    { id: Math.random().toString(36).substr(2, 9), type: 'LinkedIn', content: 'Hey {{first_name}}, sent you an email a few days ago. Love what you are doing with...', condition: 'If opened' }
   ]);
   
   const [selectedInboxes, setSelectedInboxes] = useState<string[]>(['alex@growthflow.io']);
@@ -162,6 +179,8 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
   const [isSmartRotation, setIsSmartRotation] = useState(true);
   const [activeStepMenu, setActiveStepMenu] = useState<string | null>(null);
   const [activeHeaderMenu, setActiveHeaderMenu] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isLaunching, setIsLaunching] = useState(false);
 
   const availableInboxes = [
     { email: 'alex@growthflow.io', provider: 'Gmail', health: 98 },
@@ -169,6 +188,47 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
     { email: 'sales@growthflow.io', provider: 'Gmail', health: 85 },
     { email: 'growth@growthflow.io', provider: 'SMTP', health: 99 }
   ];
+
+  const handleDuplicateStep = (id: string) => {
+    const stepToCopy = steps.find(s => s.id === id);
+    if (!stepToCopy) return;
+    
+    const index = steps.findIndex(s => s.id === id);
+    const newStep = { ...stepToCopy, id: Math.random().toString(36).substr(2, 9) };
+    
+    const newSteps = [...steps];
+    newSteps.splice(index + 1, 0, newStep);
+    setSteps(newSteps);
+    setActiveStepMenu(null);
+  };
+
+  const handleDeleteStep = (id: string) => {
+    if (steps.length <= 1) {
+      alert("A sequence must have at least one step.");
+      return;
+    }
+    setSteps(steps.filter(s => s.id !== id));
+    setActiveStepMenu(null);
+  };
+
+  const handleAddCondition = (id: string) => {
+    const conditions = ['If opened', 'If not replied', 'If clicked', 'Always'];
+    const currentStep = steps.find(s => s.id === id);
+    const currentIndex = conditions.indexOf(currentStep.condition || 'Always');
+    const nextCondition = conditions[(currentIndex + 1) % conditions.length];
+    
+    setSteps(steps.map(s => s.id === id ? { ...s, condition: nextCondition } : s));
+    setActiveStepMenu(null);
+  };
+
+  const handleLaunchCampaign = () => {
+    setIsLaunching(true);
+    setTimeout(() => {
+      setIsLaunching(false);
+      alert("Campaign launched successfully! It is now live across your selected inboxes.");
+      onCancel();
+    }, 2000);
+  };
 
   const toggleInbox = (email: string) => {
     setSelectedInboxes(prev => 
@@ -206,11 +266,6 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
                     {email[0]}
                   </div>
                 ))}
-                {selectedInboxes.length > 3 && (
-                  <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[8px] font-bold text-slate-600">
-                    +{selectedInboxes.length - 3}
-                  </div>
-                )}
               </div>
               <span className="text-xs font-bold">{selectedInboxes.length} Account{selectedInboxes.length > 1 ? 's' : ''}</span>
               <ChevronDown size={14} className={`text-slate-400 transition-transform ${showInboxSelector ? 'rotate-180' : ''}`} />
@@ -241,83 +296,32 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
                     </label>
                   ))}
                 </div>
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2">
-                      <RotateCw size={14} className={`text-blue-600 ${isSmartRotation ? 'animate-spin-slow' : ''}`} />
-                      <span className="text-[10px] font-bold text-slate-600">Smart Rotation</span>
-                    </div>
-                    <button 
-                      onClick={() => setIsSmartRotation(!isSmartRotation)}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isSmartRotation ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'}`}
-                    >
-                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isSmartRotation ? 'translate-x-5' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </div>
           
-          <button className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300">
+          <button 
+            onClick={() => setIsPreviewMode(true)}
+            className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300"
+          >
             <Eye size={16} /> Preview
           </button>
-          <button className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95">Launch Campaign</button>
-          
-          <div className="relative">
-            <button 
-              onClick={() => setActiveHeaderMenu(!activeHeaderMenu)}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-500 transition-colors"
-            >
-              <MoreHorizontal size={20} />
-            </button>
-            {activeHeaderMenu && (
-              <div className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-[70] py-2 animate-in fade-in zoom-in-95 overflow-hidden">
-                <button className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors">
-                  <FileText size={16} className="text-slate-400" /> Save as Draft
-                </button>
-                <button className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors">
-                  <Copy size={16} className="text-slate-400" /> Duplicate Sequence
-                </button>
-                <button className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors">
-                  <Share2 size={16} className="text-slate-400" /> Share Template
-                </button>
-                <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
-                <button className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors">
-                  <Settings size={16} className="text-slate-400" /> Sequence Settings
-                </button>
-              </div>
-            )}
-          </div>
+          <button 
+            onClick={handleLaunchCampaign}
+            disabled={isLaunching}
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center gap-2"
+          >
+            {isLaunching ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} fill="currentColor" />}
+            {isLaunching ? 'Launching...' : 'Launch Campaign'}
+          </button>
         </div>
       </div>
 
       <div className="space-y-4 relative">
-        <div className="p-6 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/50 rounded-[32px] flex items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-blue-100 dark:border-blue-800">
-              <Zap size={28} />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-blue-900 dark:text-blue-300">Distributed Multi-Inbox Sending</p>
-              <p className="text-xs text-blue-700/70 dark:text-blue-500/70 leading-relaxed max-w-md">
-                Emails will be load-balanced across <b>{selectedInboxes.length} connected accounts</b>. 
-                {isSmartRotation ? ' Smart rotation is active to maintain health and prevent blacklisting.' : ' Manual distribution enabled.'}
-              </p>
-            </div>
-          </div>
-          <div className="hidden lg:flex flex-col items-end">
-            <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-1">Max Daily Volume</p>
-            <p className="text-xl font-black text-blue-900 dark:text-blue-200">{selectedInboxes.length * 50} <span className="text-xs font-bold text-blue-500">EMAILS</span></p>
-          </div>
-        </div>
-
         {steps.map((step, idx) => (
           <div key={step.id} className="relative flex flex-col items-center">
-            {/* Connection Line */}
             {idx > 0 && (
               <div className="w-px h-12 bg-slate-200 dark:bg-slate-800 relative">
-                {/* Condition Tag */}
                 {step.condition && (
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
                     <GitBranch size={10} className="text-blue-500" />
@@ -328,7 +332,7 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
             )}
 
             <div className="w-full relative group">
-              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:border-blue-500 transition-all cursor-default">
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:border-blue-500 transition-all">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-bold border border-slate-100 dark:border-slate-700 shadow-sm">
@@ -338,38 +342,42 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
                       <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         {step.type === 'Email' ? <Mail size={18} className="text-blue-500" /> : step.type === 'Wait' ? <Clock size={18} className="text-amber-500" /> : <Linkedin size={18} className="text-blue-600" />}
                         {step.type} Step
-                        {step.type === 'Email' && step.subject && <span className="text-slate-400 font-normal hidden sm:inline text-sm">: {step.subject}</span>}
                       </h4>
                     </div>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-400" title="AI Rewrite"><Sparkles size={16} /></button>
-                    
                     <div className="relative">
                       <button 
                         onClick={() => setActiveStepMenu(activeStepMenu === step.id ? null : step.id)}
                         className={`p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors ${activeStepMenu === step.id ? 'text-blue-600 bg-slate-50 dark:bg-slate-800' : 'text-slate-400'}`} 
-                        title="Settings"
                       >
                         <MoreHorizontal size={16} />
                       </button>
                       {activeStepMenu === step.id && (
                         <div className="absolute top-full right-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 py-2 animate-in fade-in zoom-in-95 overflow-hidden">
-                          <button className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
-                            <GitBranch size={14} className="text-slate-400" /> Add Condition
+                          <button 
+                            onClick={() => handleAddCondition(step.id)}
+                            className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                          >
+                            <GitBranch size={14} className="text-slate-400" /> Cycle Condition
                           </button>
-                          <button className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
+                          <button 
+                            onClick={() => handleDuplicateStep(step.id)}
+                            className="w-full px-4 py-2 text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                          >
                             <Layers size={14} className="text-slate-400" /> Duplicate Step
                           </button>
                           <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
-                          <button className="w-full px-4 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 transition-colors">
+                          <button 
+                            onClick={() => handleDeleteStep(step.id)}
+                            className="w-full px-4 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                          >
                             <Trash2 size={14} /> Delete Step
                           </button>
                         </div>
                       )}
                     </div>
-
-                    <button className="p-2 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-red-500" title="Delete"><Trash2 size={16} /></button>
+                    <button onClick={() => handleDeleteStep(step.id)} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-red-500"><Trash2 size={16} /></button>
                   </div>
                 </div>
 
@@ -381,17 +389,10 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
                        <input 
                          type="number" 
                          value={step.delayDays} 
-                         className="w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                         onChange={(e) => setSteps(steps.map(s => s.id === step.id ? {...s, delayDays: parseInt(e.target.value)} : s))}
+                         className="w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-sm font-bold text-center"
                        />
                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">days</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <GitBranch size={14} className="text-slate-400" />
-                       <select className="bg-transparent border-none text-xs font-bold text-blue-600 outline-none cursor-pointer">
-                         <option>If no reply</option>
-                         <option>Always</option>
-                         <option>If bounced</option>
-                       </select>
                     </div>
                   </div>
                 ) : (
@@ -399,26 +400,21 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
                     {step.type === 'Email' && (
                       <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
                         <span className="text-xs font-bold text-slate-400 uppercase w-16">Subject</span>
-                        <input type="text" value={step.subject} className="bg-transparent border-none outline-none text-sm w-full font-medium text-slate-700 dark:text-slate-300" placeholder="Email subject..." />
+                        <input 
+                          type="text" 
+                          value={step.subject} 
+                          onChange={(e) => setSteps(steps.map(s => s.id === step.id ? {...s, subject: e.target.value} : s))}
+                          className="bg-transparent border-none outline-none text-sm w-full font-medium" 
+                        />
                       </div>
                     )}
                     <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 min-h-[120px]">
                       <textarea 
                         className="bg-transparent border-none outline-none text-sm w-full h-full resize-none text-slate-700 dark:text-slate-300 leading-relaxed custom-scrollbar font-sans"
-                        defaultValue={step.content}
+                        value={step.content}
+                        onChange={(e) => setSteps(steps.map(s => s.id === step.id ? {...s, content: e.target.value} : s))}
                         placeholder={`Write your ${step.type} content...`}
                       />
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                        <div className="flex gap-1">
-                          <button className="text-[10px] font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:border-blue-500 transition-all">{"{{first_name}}"}</button>
-                          <button className="text-[10px] font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:border-blue-500 transition-all">{"{{company_name}}"}</button>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-full border border-emerald-100 dark:border-emerald-800">
-                            <CheckCircle2 size={12} /> SPAM CHECK PASSED
-                          </span>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -426,32 +422,51 @@ const CampaignBuilder = ({ onCancel }: { onCancel: () => void }) => {
             </div>
           </div>
         ))}
+      </div>
 
-        {/* Add Step Tooltip/Menu */}
-        <div className="flex flex-col items-center mt-12">
-          <div className="w-px h-12 bg-slate-200 dark:bg-slate-800 border-dashed mb-2"></div>
-          <button className="flex items-center gap-3 px-8 py-4 bg-slate-100 dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-slate-500 font-bold hover:bg-white dark:hover:bg-slate-800 hover:border-blue-500 hover:text-blue-500 transition-all group shadow-sm">
-            <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
-            Add New Step to Flow
-          </button>
-          
-          <div className="mt-8 grid grid-cols-4 gap-4 max-w-lg">
-            {[
-              { label: 'Email', icon: Mail, color: 'blue' },
-              { label: 'Wait', icon: Clock, color: 'amber' },
-              { label: 'LinkedIn', icon: Linkedin, color: 'blue' },
-              { label: 'Branch', icon: GitBranch, color: 'indigo' },
-            ].map(tool => (
-              <div key={tool.label} className="flex flex-col items-center gap-2 cursor-pointer group">
-                <div className={`w-12 h-12 rounded-2xl bg-${tool.color}-50 dark:bg-${tool.color}-900/20 text-${tool.color}-600 flex items-center justify-center group-hover:scale-110 transition-transform border border-transparent group-hover:border-${tool.color}-200`}>
-                  <tool.icon size={20} />
+      {/* Preview Modal */}
+      {isPreviewMode && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white">
+                  <Eye size={24} />
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-slate-600 transition-colors">{tool.label}</span>
+                <div>
+                  <h2 className="text-xl font-bold">Campaign Preview</h2>
+                  <p className="text-sm text-slate-500">{steps.length} touchpoints configured.</p>
+                </div>
               </div>
-            ))}
+              <button onClick={() => setIsPreviewMode(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20} /></button>
+            </div>
+            
+            <div className="p-8 overflow-y-auto custom-scrollbar space-y-6 flex-1 bg-slate-50/30 dark:bg-slate-900/30">
+              {steps.map((step, idx) => (
+                <div key={step.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
+                   <div className="flex items-center justify-between mb-4">
+                      <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full text-slate-500 uppercase">Step {idx + 1}</span>
+                      <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">{step.type}</span>
+                   </div>
+                   {step.type === 'Wait' ? (
+                     <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">⏳ Wait for <b>{step.delayDays} days</b> before next action.</p>
+                   ) : (
+                     <div className="space-y-2">
+                        {step.subject && <p className="text-xs font-bold text-slate-900 dark:text-white">Subject: {step.subject}</p>}
+                        <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed border-t border-slate-100 dark:border-slate-700 pt-3">{step.content}</p>
+                     </div>
+                   )}
+                </div>
+              ))}
+            </div>
+
+            <div className="p-8 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+               <button onClick={() => setIsPreviewMode(false)} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl">Edit Sequence</button>
+               <button onClick={handleLaunchCampaign} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-500/20 active:scale-95">Launch Now</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

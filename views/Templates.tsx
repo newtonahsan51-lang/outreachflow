@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Search, Copy, Eye, FileText, Plus, Sparkles, 
   Filter, Bookmark, X, Save, Check, Type, 
@@ -44,6 +45,7 @@ const INITIAL_PRESETS = [
 ];
 
 const Templates = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [templates, setTemplates] = useState(INITIAL_PRESETS);
@@ -72,6 +74,15 @@ const Templates = () => {
     setTemplates([template, ...templates]);
     setShowCreateModal(false);
     setNewTemplate({ name: '', category: 'Cold Outreach', subject: '', body: '' });
+  };
+
+  const handleUseTemplate = (template: any) => {
+    navigate('/campaigns', { state: { template } });
+  };
+
+  const handleCopyTemplate = (template: any) => {
+    navigator.clipboard.writeText(`Subject: ${template.subject}\n\n${template.body}`);
+    alert('Template copied to clipboard!');
   };
 
   return (
@@ -128,7 +139,7 @@ const Templates = () => {
                 <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-colors shadow-sm">
                   <Bookmark size={18} />
                 </button>
-                <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-colors shadow-sm">
+                <button onClick={() => handleCopyTemplate(template)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 transition-colors shadow-sm">
                   <Copy size={18} />
                 </button>
               </div>
@@ -154,7 +165,10 @@ const Templates = () => {
                   <p className="text-[10px] font-bold text-slate-500 uppercase">Reply</p>
                 </div>
               </div>
-              <button className="px-4 py-2 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md">
+              <button 
+                onClick={() => handleUseTemplate(template)}
+                className="px-4 py-2 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md hover:bg-blue-600 dark:hover:bg-blue-600 dark:hover:text-white"
+              >
                 Use Template
               </button>
             </div>

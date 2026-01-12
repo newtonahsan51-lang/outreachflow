@@ -50,4 +50,8 @@ export const apiService = {
   // CRM
   getDeals: () => apiService.request('get_deals'),
   addDeal: (deal: any) => apiService.request('add_deal', 'POST', deal),
+
+  // Direct Communication
+  sendEmail: (data: { to: string, subject: string, body: string, inbox_id: string }) => 
+    apiService.request('send_email', 'POST', data),
 };

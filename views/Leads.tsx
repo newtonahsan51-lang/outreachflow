@@ -9,10 +9,14 @@ import { apiService } from '../services/apiService';
 
 const Leads = () => {
   const [leads, setLeads] = useState<any[]>([]);
+  const [inboxes, setInboxes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<any>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -23,11 +27,21 @@ const Leads = () => {
     source: 'Manual'
   });
 
+  const [sendForm, setSendForm] = useState({
+    inbox_id: '',
+    subject: '',
+    body: ''
+  });
+
   const fetchLeads = async () => {
     setIsLoading(true);
     try {
-      const data = await apiService.getLeads();
-      setLeads(data || []);
+      const [leadsData, inboxesData] = await Promise.all([
+        apiService.getLeads(),
+        apiService.getInboxes()
+      ]);
+      setLeads(leadsData || []);
+      setInboxes(inboxesData || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -58,6 +72,38 @@ const Leads = () => {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSendEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sendForm.inbox_id || !sendForm.subject || !sendForm.body) {
+      alert("Please fill all fields.");
+      return;
+    }
+    setIsSending(true);
+    try {
+      const res = await apiService.sendEmail({
+        to: selectedLead.email,
+        ...sendForm
+      });
+      if (res.success) {
+        alert(`Email successfully sent to ${selectedLead.email}`);
+        setShowSendModal(false);
+        setSendForm({ inbox_id: '', subject: '', body: '' });
+        await apiService.addLog({
+          user: 'Admin',
+          action: 'Direct Email Sent',
+          resource: selectedLead.email,
+          status: 'Success'
+        });
+      } else {
+        alert("Failed to send email: " + res.error);
+      }
+    } catch (err) {
+      alert("An error occurred while sending the email.");
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -92,7 +138,7 @@ const Leads = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Leads Management</h1>
-          <p className="text-slate-500 dark:text-slate-400">Manage all prospects in your database.</p>
+          <p className="text-slate-500 dark:text-slate-400">Manage all prospects and send direct outreach.</p>
         </div>
         <div className="flex gap-3">
           <button 
@@ -164,6 +210,13 @@ const Leads = () => {
                       </td>
                       <td className="px-8 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => { setSelectedLead(lead); setShowSendModal(true); }}
+                            className="p-2 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-700 rounded-xl text-blue-600 transition-all shadow-sm"
+                            title="Send Direct Email"
+                          >
+                            <Send size={16} />
+                          </button>
                           <button onClick={() => handleDeleteLead(lead.id, lead.email)} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-all shadow-sm">
                             <Trash2 size={16} />
                           </button>
@@ -178,6 +231,83 @@ const Leads = () => {
           </div>
         )}
       </div>
+
+      {/* Send Email Modal */}
+      {showSendModal && selectedLead && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                  <Mail size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Quick Send</h2>
+                  <p className="text-sm text-slate-500 font-medium">Message to {selectedLead.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20} /></button>
+            </div>
+            
+            <form onSubmit={handleSendEmail} className="p-8 space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Select Sending Account</label>
+                <select 
+                  required
+                  value={sendForm.inbox_id}
+                  onChange={e => setSendForm({...sendForm, inbox_id: e.target.value})}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Choose an Inbox...</option>
+                  {inboxes.map(inbox => (
+                    <option key={inbox.id} value={inbox.id}>{inbox.email} ({inbox.provider})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email Subject</label>
+                <input 
+                  required 
+                  value={sendForm.subject} 
+                  onChange={e => setSendForm({...sendForm, subject: e.target.value})} 
+                  type="text" 
+                  placeholder="Re: Quick Question" 
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm font-medium" 
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Message Body</label>
+                <textarea 
+                  required 
+                  rows={6}
+                  value={sendForm.body} 
+                  onChange={e => setSendForm({...sendForm, body: e.target.value})} 
+                  placeholder={`Hi ${selectedLead.name.split(' ')[0]}, ...`} 
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm font-medium resize-none" 
+                />
+              </div>
+
+              <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-3">
+                <Info className="text-blue-600 shrink-0 mt-0.5" size={16} />
+                <p className="text-[10px] text-blue-800 leading-relaxed font-medium">
+                  Direct emails are sent through your chosen SMTP/IMAP account instantly and recorded in logs.
+                </p>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isSending}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+              >
+                {isSending ? <Loader2 className="animate-spin" /> : <Send size={18} />}
+                {isSending ? 'Sending...' : 'Send Now'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add Lead Modal */}
       {showAddModal && (
