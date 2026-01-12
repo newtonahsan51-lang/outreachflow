@@ -1,14 +1,10 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShieldAlert, Settings, Users, CreditCard, Activity, 
   TrendingUp, DollarSign, Package, Save, Plus, 
-  Trash2, Edit2, CheckCircle2, AlertCircle, RefreshCw,
-  Search, Filter, MoreVertical, ExternalLink, ArrowUpRight,
-  Database, Zap, Lock, Eye, Check, UserCheck, UserX, 
-  ShieldCheck, MoreHorizontal, Mail, Calendar, User,
-  Loader2, LogIn, FilePlus, Shield, XCircle, Clock,
-  Globe, Server, Cpu, Bell, Power, X as XClose
+  Trash2, CheckCircle2, RefreshCw,
+  Search, MoreVertical, Database, Zap, ShieldCheck, 
+  UserCheck, Loader2, Shield, Globe, X as XClose
 } from 'lucide-react';
 import { apiService } from '../services/apiService';
 
@@ -23,15 +19,15 @@ const AdminPanel = () => {
   const [systemConfig, setSystemConfig] = useState<any>({
     platformName: 'OutreachFlow',
     supportEmail: '',
-    maintenanceMode: false,
-    publicSignup: true,
-    enforce2FA: false,
+    maintenanceMode: 0,
+    publicSignup: 1,
+    enforce2FA: 0,
     globalEmailLimit: 50,
     retryLogic: 'Exponential',
     backupFrequency: 'Daily'
   });
 
-  const [systemHealth, setSystemHealth] = useState({
+  const [systemHealth] = useState({
     api: 'Healthy',
     database: 'Optimal',
     sendingQueue: 'Clear',
@@ -41,34 +37,33 @@ const AdminPanel = () => {
   const [ipRanges, setIpRanges] = useState<string[]>([]);
   const [showIpModal, setShowIpModal] = useState(false);
   const [newIp, setNewIp] = useState('');
-  const [isEditingPlan, setIsEditingPlan] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
 
-  // Load Initial Data from Server
+  const initData = async () => {
+    try {
+      setIsLoading(true);
+      const [u, p, c, l, w] = await Promise.all([
+        apiService.getUsers(),
+        apiService.getPlans(),
+        apiService.getConfig(),
+        apiService.getLogs(),
+        apiService.getWhitelist()
+      ]);
+      setUsers(u || []);
+      setPlans(p || []);
+      if (c && Object.keys(c).length > 0) setSystemConfig(c);
+      setAuditLogs(l || []);
+      setIpRanges(w || []);
+    } catch (err) {
+      console.error("Server sync failed", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const init = async () => {
-      try {
-        setIsLoading(true);
-        const [u, p, c, l, w] = await Promise.all([
-          apiService.getUsers(),
-          apiService.getPlans(),
-          apiService.getConfig(),
-          apiService.getLogs(),
-          apiService.getWhitelist()
-        ]);
-        setUsers(u || []);
-        setPlans(p || []);
-        if (c) setSystemConfig(c);
-        setAuditLogs(l || []);
-        setIpRanges(w || []);
-      } catch (err) {
-        console.error("Server sync failed", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    init();
+    initData();
   }, []);
 
   const handleToggleUserStatus = async (userId: number, currentStatus: string) => {
@@ -110,6 +105,12 @@ const AdminPanel = () => {
     try {
       await apiService.saveWhitelist(ipRanges);
       setShowIpModal(false);
+      await apiService.addLog({
+        user: 'Admin',
+        action: 'Whitelist Updated',
+        resource: 'Network Security',
+        status: 'Success'
+      });
     } catch (err) {
       alert('Error saving IP whitelist');
     }
@@ -169,7 +170,7 @@ const AdminPanel = () => {
         <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-lg font-bold">System Infrastructure</h3>
-            <button onClick={() => window.location.reload()} className="text-xs font-bold text-blue-600 flex items-center gap-1">
+            <button onClick={initData} className="text-xs font-bold text-blue-600 flex items-center gap-1">
               <RefreshCw size={14} /> Refresh Logs
             </button>
           </div>
@@ -196,6 +197,12 @@ const AdminPanel = () => {
                 <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
                 <p className="text-[10px] leading-relaxed">Platform is currently running from production PHP server.</p>
               </div>
+              {ipRanges.length === 0 && (
+                <div className="flex gap-3 p-3 bg-red-500/10 rounded-2xl border border-red-500/20">
+                  <Shield size={16} className="text-red-400 shrink-0" />
+                  <p className="text-[10px] leading-relaxed">IP Whitelisting is disabled. Consider adding your IP for security.</p>
+                </div>
+              )}
             </div>
           </div>
           <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-[60px]"></div>
@@ -345,6 +352,10 @@ const AdminPanel = () => {
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Platform Name</label>
               <input type="text" value={systemConfig.platformName} onChange={(e) => setSystemConfig({...systemConfig, platformName: e.target.value})} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-semibold" />
             </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Support Email</label>
+              <input type="email" value={systemConfig.supportEmail} onChange={(e) => setSystemConfig({...systemConfig, supportEmail: e.target.value})} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-semibold" />
+            </div>
           </div>
         </div>
 
@@ -360,6 +371,26 @@ const AdminPanel = () => {
               </div>
               <button onClick={() => setShowIpModal(true)} className="text-xs font-bold text-blue-600 hover:underline">Configure</button>
             </div>
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold">Maintenance Mode</p>
+                <button 
+                  onClick={() => setSystemConfig({...systemConfig, maintenanceMode: systemConfig.maintenanceMode ? 0 : 1})}
+                  className={`w-12 h-6 rounded-full relative transition-colors ${systemConfig.maintenanceMode ? 'bg-red-500' : 'bg-slate-200 dark:bg-slate-800'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${systemConfig.maintenanceMode ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold">Public Registration</p>
+                <button 
+                  onClick={() => setSystemConfig({...systemConfig, publicSignup: systemConfig.publicSignup ? 0 : 1})}
+                  className={`w-12 h-6 rounded-full relative transition-colors ${systemConfig.publicSignup ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-800'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${systemConfig.publicSignup ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
+            </div>
         </div>
       </div>
 
@@ -373,10 +404,13 @@ const AdminPanel = () => {
   );
 
   const renderAuditLogs = () => (
-    <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-in fade-in duration-500">
         <div className="p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 flex items-center justify-between">
-           <h3 className="text-lg font-bold">Server Audit Logs</h3>
-           <button onClick={() => window.location.reload()} className="p-2 hover:bg-white rounded-xl text-slate-400"><RefreshCw size={16} /></button>
+           <div>
+             <h3 className="text-lg font-bold">Server Audit Logs</h3>
+             <p className="text-sm text-slate-500">Historical record of system-wide administrative actions.</p>
+           </div>
+           <button onClick={initData} className="p-2 hover:bg-white rounded-xl text-slate-400 transition-all"><RefreshCw size={16} /></button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -389,19 +423,30 @@ const AdminPanel = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                  <td className="px-8 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${log.status === 'Success' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><Activity size={16} /></div>
-                      <div><p className="text-sm font-bold text-slate-900 dark:text-white">{log.action}</p></div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-4 text-sm font-medium text-slate-700 dark:text-slate-300">{log.user}</td>
-                  <td className="px-8 py-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.status === 'Success' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{log.status}</span></td>
-                  <td className="px-8 py-4 text-right text-xs text-slate-400">{log.timestamp}</td>
-                </tr>
-              ))}
+              {filteredLogs.length === 0 ? (
+                <tr><td colSpan={4} className="p-10 text-center text-slate-400 font-medium">No activity logs recorded.</td></tr>
+              ) : (
+                filteredLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-8 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${log.status === 'Success' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}><Activity size={16} /></div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">{log.action}</p>
+                          <p className="text-[10px] text-slate-400 font-medium uppercase">{log.resource}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-4 text-sm font-medium text-slate-700 dark:text-slate-300">{log.user}</td>
+                    <td className="px-8 py-4">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.status === 'Success' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                        {log.status}
+                      </span>
+                    </td>
+                    <td className="px-8 py-4 text-right text-xs text-slate-400 font-medium">{log.timestamp}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -420,7 +465,7 @@ const AdminPanel = () => {
       </div>
 
       <div className="flex flex-col md:flex-row gap-8">
-        <aside className="w-full md:w-64 space-y-1">
+        <aside className="w-full md:w-64 space-y-1 shrink-0">
           {[
             { id: 'Overview', icon: LayoutGridIcon },
             { id: 'Plans & Pricing', icon: CreditCard },
@@ -442,7 +487,7 @@ const AdminPanel = () => {
           ))}
         </aside>
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {isLoading ? (
             <div className="h-64 flex flex-col items-center justify-center gap-4 text-slate-400">
                <Loader2 size={40} className="animate-spin text-blue-600" />
@@ -463,24 +508,44 @@ const AdminPanel = () => {
       {showIpModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-xl font-bold">IP Whitelisting</h2>
-              <button onClick={() => setShowIpModal(false)} className="p-2 hover:bg-slate-100 rounded-xl"><XClose size={20} /></button>
+              <button onClick={() => setShowIpModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"><XClose size={20} /></button>
             </div>
             <div className="p-8 space-y-6">
+              <p className="text-sm text-slate-500">Only these IP addresses will be able to access administrative functions.</p>
               <div className="flex gap-2">
-                <input type="text" placeholder="e.g. 192.168.1.1" value={newIp} onChange={(e) => setNewIp(e.target.value)} className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none" />
-                <button onClick={() => { if(newIp) setIpRanges([...ipRanges, newIp]); setNewIp(''); }} className="px-6 bg-blue-600 text-white rounded-2xl font-bold"><Plus size={20} /></button>
+                <input 
+                  type="text" 
+                  placeholder="e.g. 192.168.1.1" 
+                  value={newIp} 
+                  onChange={(e) => setNewIp(e.target.value)} 
+                  className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                />
+                <button 
+                  onClick={() => { if(newIp) { setIpRanges([...ipRanges, newIp]); setNewIp(''); } }} 
+                  className="px-6 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all active:scale-95"
+                >
+                  <Plus size={20} />
+                </button>
               </div>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {ipRanges.map(ip => (
-                  <div key={ip} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                    <span className="text-sm font-mono">{ip}</span>
-                    <button onClick={() => setIpRanges(ipRanges.filter(i => i !== ip))} className="p-1.5 text-slate-400 hover:text-red-500"><Trash2 size={16} /></button>
-                  </div>
-                ))}
+              <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                {ipRanges.length === 0 ? (
+                  <p className="text-center py-4 text-xs text-slate-400 font-bold uppercase tracking-widest">No restricted IPs.</p>
+                ) : (
+                  ipRanges.map(ip => (
+                    <div key={ip} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl">
+                      <span className="text-sm font-mono font-bold text-slate-600 dark:text-slate-400">{ip}</span>
+                      <button onClick={() => setIpRanges(ipRanges.filter(i => i !== ip))} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
-              <button onClick={handleSaveWhitelist} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-[24px] font-bold">Apply & Sync with Server</button>
+              <button onClick={handleSaveWhitelist} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-[24px] font-bold shadow-xl transition-all active:scale-95">
+                Apply & Sync with Server
+              </button>
             </div>
           </div>
         </div>
@@ -488,12 +553,6 @@ const AdminPanel = () => {
     </div>
   );
 };
-
-const XIcon = ({ className, size }: { className?: string, size?: number }) => (
-  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 6 6 18M6 6l12 12"/>
-  </svg>
-);
 
 const LayoutGridIcon = ({ className, size }: { className?: string, size?: number }) => (
   <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

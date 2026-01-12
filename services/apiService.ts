@@ -37,11 +37,15 @@ export const apiService = {
   // Plans
   getPlans: () => apiService.request('get_plans'),
   
-  // Leads & Campaigns
+  // Leads
   getLeads: () => apiService.request('get_leads'),
+  addLead: (lead: any) => apiService.request('add_lead', 'POST', lead),
+  deleteLead: (id: number) => apiService.request(`delete_lead&id=${id}`, 'DELETE'),
   
   // Inboxes
   getInboxes: () => apiService.request('get_inboxes'),
+  addInbox: (data: any) => apiService.request('add_inbox', 'POST', data),
+  deleteInbox: (id: number) => apiService.request(`delete_inbox&id=${id}`, 'DELETE'),
   
   // CRM
   getDeals: () => apiService.request('get_deals'),
