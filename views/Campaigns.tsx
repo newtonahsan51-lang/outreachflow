@@ -9,7 +9,7 @@ import {
   RotateCw, Check, CheckCircle2, FileText, Settings, Copy, Share2, Loader2
 } from 'lucide-react';
 
-const mockCampaigns = [
+const INITIAL_CAMPAIGNS = [
   { id: '1', name: 'SaaS Agency Outreach', status: 'Active', sent: 1240, open: 68, reply: 24, steps: 4 },
   { id: '2', name: 'Real Estate Cold Outreach', status: 'Draft', sent: 0, open: 0, reply: 0, steps: 3 },
   { id: '3', name: 'Q4 Recruitment Drive', status: 'Paused', sent: 450, open: 52, reply: 12, steps: 5 },
@@ -43,6 +43,7 @@ const Campaigns = () => {
   const location = useLocation();
   const [view, setView] = useState<'list' | 'presets' | 'builder'>('list');
   const [initialTemplate, setInitialTemplate] = useState<any>(null);
+  const [campaigns, setCampaigns] = useState(INITIAL_CAMPAIGNS);
 
   useEffect(() => {
     if (location.state?.template) {
@@ -51,6 +52,30 @@ const Campaigns = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  const handleToggleStatus = (id: string) => {
+    setCampaigns(prev => prev.map(c => {
+      if (c.id === id) {
+        const nextStatus = c.status === 'Active' ? 'Paused' : 'Active';
+        return { ...c, status: nextStatus };
+      }
+      return c;
+    }));
+  };
+
+  const handleDeleteCampaign = (id: string) => {
+    if (confirm("Are you sure you want to delete this campaign?")) {
+      setCampaigns(prev => prev.filter(c => c.id !== id));
+    }
+  };
+
+  const handleViewCampaign = (c: any) => {
+    setInitialTemplate({
+      subject: c.name + " Initial Step",
+      body: "Hi there, I noticed your profile and..."
+    });
+    setView('builder');
+  };
 
   if (view === 'presets') {
     return <PresetFlowSelection onSelect={() => setView('builder')} onCancel={() => setView('list')} />;
@@ -76,7 +101,7 @@ const Campaigns = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {mockCampaigns.map((c) => (
+        {campaigns.map((c) => (
           <div key={c.id} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-blue-300 dark:hover:border-blue-900 transition-all group">
             <div className="flex items-center gap-4 flex-1">
               <div className={`p-3 rounded-xl ${c.status === 'Active' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
@@ -110,13 +135,13 @@ const Campaigns = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400" title="Preview"><Eye size={18} /></button>
+              <button onClick={() => handleViewCampaign(c)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400" title="View/Edit"><Eye size={18} /></button>
               {c.status === 'Active' ? (
-                <button className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg text-amber-600" title="Pause"><Pause size={18} /></button>
+                <button onClick={() => handleToggleStatus(c.id)} className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg text-amber-600" title="Pause"><Pause size={18} /></button>
               ) : (
-                <button className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg text-green-600" title="Start"><Play size={18} /></button>
+                <button onClick={() => handleToggleStatus(c.id)} className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg text-green-600" title="Start"><Play size={18} /></button>
               )}
-              <button className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg text-red-600" title="Delete"><Trash2 size={18} /></button>
+              <button onClick={() => handleDeleteCampaign(c.id)} className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg text-red-600" title="Delete"><Trash2 size={18} /></button>
               <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400"><MoreHorizontal size={18} /></button>
             </div>
           </div>
@@ -404,7 +429,7 @@ const CampaignBuilder = ({ onCancel, initialTemplate }: { onCancel: () => void, 
                           type="text" 
                           value={step.subject} 
                           onChange={(e) => setSteps(steps.map(s => s.id === step.id ? {...s, subject: e.target.value} : s))}
-                          className="bg-transparent border-none outline-none text-sm w-full font-medium" 
+                          className="bg-transparent border-none outline-none text-sm w-full font-medium text-slate-700 dark:text-slate-300" 
                         />
                       </div>
                     )}
