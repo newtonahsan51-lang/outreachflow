@@ -1,5 +1,4 @@
-
-const API_URL = '/api.php'; // Set relative path for CPanel
+const API_URL = '/api.php'; 
 
 export const apiService = {
   async request(action: string, method: string = 'GET', body: any = null) {
@@ -25,9 +24,11 @@ export const apiService = {
   updateUserStatus: (id: number, status: string) => apiService.request('update_user_status', 'POST', { id, status }),
   deleteUser: (id: number) => apiService.request(`delete_user&id=${id}`, 'DELETE'),
 
-  // Config
+  // Config & Security
   getConfig: () => apiService.request('get_config'),
   saveConfig: (config: any) => apiService.request('save_config', 'POST', config),
+  getWhitelist: () => apiService.request('get_whitelist'),
+  saveWhitelist: (ips: string[]) => apiService.request('save_whitelist', 'POST', ips),
 
   // Logs
   getLogs: () => apiService.request('get_logs'),
@@ -36,6 +37,13 @@ export const apiService = {
   // Plans
   getPlans: () => apiService.request('get_plans'),
   
-  // Whitelist
-  getWhitelist: () => apiService.request('get_whitelist'),
+  // Leads & Campaigns
+  getLeads: () => apiService.request('get_leads'),
+  
+  // Inboxes
+  getInboxes: () => apiService.request('get_inboxes'),
+  
+  // CRM
+  getDeals: () => apiService.request('get_deals'),
+  addDeal: (deal: any) => apiService.request('add_deal', 'POST', deal),
 };
