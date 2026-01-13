@@ -12,6 +12,7 @@ import { AuthView } from './views/Auth';
 import Templates from './views/Templates';
 import Sequences from './views/Sequences';
 import Analytics from './views/Analytics';
+import Deliverability from './views/Deliverability';
 import Team from './views/Team';
 import Billing from './views/Billing';
 import Settings from './views/Settings';
@@ -38,6 +39,7 @@ const App: React.FC = () => {
           <Route path="/templates" element={<Templates />} />
           <Route path="/sequences" element={<Sequences />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/deliverability" element={<Deliverability />} />
           <Route path="/team" element={<Team />} />
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/billing" element={<Billing />} />

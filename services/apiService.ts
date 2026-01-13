@@ -1,83 +1,95 @@
-const API_URL = '/api.php'; 
 
 /**
- * Robust API service with mock fallbacks.
- * Ensures the UI remains functional for the demo even if the backend actions are missing.
+ * apiService handles communication with the backend (api.php).
+ * Optimized to send 'action' in both URL and Body for maximum PHP compatibility.
  */
-export const apiService = {
-  async request(action: string, method: string = 'GET', body: any = null) {
-    const url = `${API_URL}?action=${action}`;
-    const options: RequestInit = {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-    };
-    if (body) options.body = JSON.stringify(body);
+const request = async (action: string, data?: any) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for scans
+
+  try {
+    // 1. Prepare URL with action as query param (Standard for many PHP routers)
+    const url = `/api.php?action=${action}`;
     
+    // 2. Prepare Form Data (application/x-www-form-urlencoded)
+    const params = new URLSearchParams();
+    params.append('action', action);
+    
+    if (data) {
+      Object.keys(data).forEach(key => {
+        if (data[key] !== undefined && data[key] !== null) {
+          // Flatten objects/arrays for PHP compatibility
+          const val = typeof data[key] === 'object' ? JSON.stringify(data[key]) : data[key];
+          params.append(key, val);
+        }
+      });
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params.toString(),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    const text = await response.text();
+    
+    if (!response.ok) {
+      throw new Error(`Server Error: ${response.status}`);
+    }
+
+    let result;
     try {
-      const response = await fetch(url, options);
-      if (!response.ok) throw new Error('Network response was not ok');
-      const data = await response.json();
-      
-      // If server returns an error explicitly, we treat it as a failure
-      if (data && data.error && (data.error.includes('Invalid action') || data.error.includes('failed'))) {
-        throw new Error(data.error);
-      }
-      
-      return data;
-    } catch (error) {
-      console.warn(`API Request to ${action} failed.`, error);
-      
-      // We only return mock success for adding operations if it's a pure UI demo environment
-      // But for critical actions like send_email, we should let the user see the real error if they are on a real server
-      if (action === 'send_email') {
-        throw error; // Propagate error to UI
-      }
-      
-      if (action === 'add_lead' || action === 'add_inbox' || action === 'add_deal' || action === 'save_config' || action === 'save_whitelist') {
+      result = JSON.parse(text);
+    } catch (e) {
+      // Fallback for simple success messages from PHP
+      if (text.toLowerCase().includes('success') || text.trim() === '1') {
         return { success: true };
       }
-      
-      if (action === 'get_leads' || action === 'get_users' || action === 'get_inboxes' || action === 'get_deals' || action === 'get_plans') {
-        return []; 
-      }
-
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      return { success: true, message: text };
     }
-  },
 
-  // Users
-  getUsers: () => apiService.request('get_users'),
-  updateUserStatus: (id: number, status: string) => apiService.request('update_user_status', 'POST', { id, status }),
-  deleteUser: (id: number) => apiService.request(`delete_user&id=${id}`, 'DELETE'),
+    if (result && result.error) {
+      throw new Error(result.error);
+    }
 
-  // Config & Security
-  getConfig: () => apiService.request('get_config'),
-  saveConfig: (config: any) => apiService.request('save_config', 'POST', config),
-  getWhitelist: () => apiService.request('get_whitelist'),
-  saveWhitelist: (ips: string[]) => apiService.request('save_whitelist', 'POST', ips),
+    return result;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error("Request timed out. The server is taking too long to respond.");
+    }
+    console.error(`API Request Failure (${action}):`, error);
+    throw error;
+  }
+};
 
-  // Logs
-  getLogs: () => apiService.request('get_logs'),
-  addLog: (log: any) => apiService.request('add_log', 'POST', log),
-
-  // Plans
-  getPlans: () => apiService.request('get_plans'),
-  
-  // Leads
-  getLeads: () => apiService.request('get_leads'),
-  addLead: (lead: any) => apiService.request('add_lead', 'POST', lead),
-  deleteLead: (id: number) => apiService.request(`delete_lead&id=${id}`, 'DELETE'),
-  
-  // Inboxes
-  getInboxes: () => apiService.request('get_inboxes'),
-  addInbox: (data: any) => apiService.request('add_inbox', 'POST', data),
-  deleteInbox: (id: number) => apiService.request(`delete_inbox&id=${id}`, 'DELETE'),
-  
-  // CRM
-  getDeals: () => apiService.request('get_deals'),
-  addDeal: (deal: any) => apiService.request('add_deal', 'POST', deal),
-
-  // Direct Communication
-  sendEmail: (data: { to: string, subject: string, body: string, inbox_id: string }) => 
-    apiService.request('send_email', 'POST', data),
+export const apiService = {
+  getUsers: () => request('get_users'),
+  updateUserStatus: (id: number, status: string) => request('update_user_status', { id, status }),
+  deleteUser: (id: number) => request('delete_user', { id }),
+  getInboxes: () => request('get_inboxes'),
+  addInbox: (data: any) => request('add_inbox', data),
+  deleteInbox: (id: number) => request('delete_inbox', { id }),
+  getLeads: () => request('get_leads'),
+  addLead: (data: any) => request('add_lead', data),
+  deleteLead: (id: number) => request('delete_lead', { id }),
+  getDeals: () => request('get_deals'),
+  addDeal: (data: any) => request('add_deal', data),
+  getLogs: () => request('get_logs'),
+  addLog: (data: any) => request('add_log', data),
+  getPlans: () => request('get_plans'),
+  getConfig: () => request('get_config'),
+  saveConfig: (data: any) => request('save_config', data),
+  getWhitelist: () => request('get_whitelist'),
+  saveWhitelist: (ips: string[]) => request('save_whitelist', { ips }),
+  getIntegrations: () => request('get_integrations'),
+  connectIntegration: (id: string) => request('connect_integration', { id }),
+  disconnectIntegration: (id: string) => request('disconnect_integration', { id }),
+  sendEmail: (data: any) => request('send_email', data),
+  checkBlacklist: () => request('check_blacklist'),
 };

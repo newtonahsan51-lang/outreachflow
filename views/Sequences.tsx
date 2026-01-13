@@ -1,11 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Workflow, Plus, ArrowRight, Mail, Linkedin, MessageSquare, 
   Clock, MoreVertical, Play, Zap, BarChart3, Target, 
   MousePointer2, X, Sparkles, Trash2, GitBranch, Save, ChevronRight,
-  ShieldCheck, RefreshCw
+  ShieldCheck, RefreshCw, ChevronDown, Loader2
 } from 'lucide-react';
+import { apiService } from '../services/apiService';
 
 const PRESET_SEQUENCES = [
   {
@@ -50,6 +51,25 @@ const STEP_TYPES = [
 const Sequences = () => {
   const [view, setView] = useState<'list' | 'builder'>('list');
   const [customSteps, setCustomSteps] = useState<any[]>([]);
+  const [availableInboxes, setAvailableInboxes] = useState<any[]>([]);
+  const [selectedInboxes, setSelectedInboxes] = useState<string[]>([]);
+  const [showInboxSelector, setShowInboxSelector] = useState(false);
+  const [isLaunching, setIsLaunching] = useState(false);
+
+  useEffect(() => {
+    const fetchInboxes = async () => {
+      try {
+        const data = await apiService.getInboxes();
+        setAvailableInboxes(data || []);
+        if (data && data.length > 0 && selectedInboxes.length === 0) {
+          setSelectedInboxes([data[0].email]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch inboxes", err);
+      }
+    };
+    fetchInboxes();
+  }, []);
 
   const addStep = (type: string) => {
     const newStep = {
@@ -65,6 +85,14 @@ const Sequences = () => {
     setCustomSteps(customSteps.filter(s => s.id !== id));
   };
 
+  const toggleInbox = (email: string) => {
+    setSelectedInboxes(prev => 
+      prev.includes(email) 
+        ? (prev.length > 1 ? prev.filter(e => e !== email) : prev) 
+        : [...prev, email]
+    );
+  };
+
   const loadPreset = (id: string) => {
     if (id === '3-step-growth') {
       setCustomSteps([
@@ -78,10 +106,23 @@ const Sequences = () => {
     }
   };
 
+  const handleLaunchSequence = () => {
+    if (selectedInboxes.length === 0) {
+      alert("Please assign at least one inbox to this sequence.");
+      return;
+    }
+    setIsLaunching(true);
+    setTimeout(() => {
+      setIsLaunching(false);
+      alert(`Sequence live with ${selectedInboxes.length} accounts!`);
+      setView('list');
+    }, 1500);
+  };
+
   if (view === 'builder') {
     return (
       <div className="flex flex-col h-[calc(100vh-140px)] animate-in fade-in duration-300">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 sticky top-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md z-50 py-2 -mx-4 px-4">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setView('list')}
@@ -89,31 +130,107 @@ const Sequences = () => {
             >
               <X size={20} />
             </button>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white">Custom Automation Builder</h1>
               <p className="text-xs text-slate-500">Design your own multi-channel outreach sequence.</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <button className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-400">
+          
+          <div className="flex items-center gap-4">
+            {/* Inbox Assignment Dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowInboxSelector(!showInboxSelector)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm hover:border-blue-500 transition-all group"
+              >
+                <div className="flex -space-x-2">
+                  {selectedInboxes.length > 0 ? (
+                    selectedInboxes.slice(0, 3).map((email, i) => (
+                      <div key={i} className="w-6 h-6 rounded-full bg-blue-600 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[8px] font-bold text-white uppercase">
+                        {email[0]}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                      <Mail size={12} />
+                    </div>
+                  )}
+                </div>
+                <div className="text-left">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Assignment</p>
+                  <p className="text-xs font-bold mt-1 text-slate-900 dark:text-white">
+                    {selectedInboxes.length > 0 ? `${selectedInboxes.length} Inboxes` : 'Select Inboxes'}
+                  </p>
+                </div>
+                <ChevronDown size={14} className={`text-slate-400 transition-transform ${showInboxSelector ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showInboxSelector && (
+                <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl z-[100] p-4 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between mb-4 px-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sending Accounts</p>
+                    <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 px-1.5 py-0.5 rounded-full font-bold">Rotation Active</span>
+                  </div>
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                    {availableInboxes.length === 0 ? (
+                      <div className="p-4 text-center">
+                        <p className="text-xs text-slate-400 font-bold">No accounts found.</p>
+                        <button onClick={() => window.location.hash = '#/inboxes'} className="text-[10px] text-blue-600 underline mt-2">Connect Inboxes</button>
+                      </div>
+                    ) : (
+                      availableInboxes.map(inbox => (
+                        <label key={inbox.id} className="flex items-center justify-between p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors group">
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedInboxes.includes(inbox.email)}
+                              onChange={() => toggleInbox(inbox.email)}
+                              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500" 
+                            />
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[140px]">{inbox.email}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className={`w-1.5 h-1.5 rounded-full ${inbox.health > 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">{inbox.provider} • {inbox.health}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <p className="text-[9px] text-slate-500 leading-tight">The sequence will automatically rotate between these accounts to ensure maximum deliverability.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:border-blue-500 transition-all">
               <Sparkles size={16} className="text-blue-600" /> Optimize with AI
             </button>
-            <button className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95">
-              <Save size={18} /> Save Sequence
+            <button 
+              onClick={handleLaunchSequence}
+              disabled={isLaunching}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold shadow-xl shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50"
+            >
+              {isLaunching ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} fill="currentColor" />}
+              {isLaunching ? 'Launching...' : 'Launch Automator'}
             </button>
           </div>
         </div>
 
         <div className="flex flex-1 gap-8 overflow-hidden">
           {/* Tool Palette */}
-          <div className="w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 flex flex-col shadow-sm">
+          <div className="w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 flex flex-col shadow-sm">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Drag to Canvas</h3>
             <div className="space-y-3">
               {STEP_TYPES.map((item) => (
                 <button 
                   key={item.type}
                   onClick={() => addStep(item.type)}
-                  className="w-full p-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 hover:border-blue-500 hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-4 group"
+                  className="w-full p-4 rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 hover:border-blue-500 hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-4 group shadow-sm"
                 >
                   <div className={`p-2 rounded-xl bg-${item.color}-100 dark:bg-${item.color}-900/30 text-${item.color}-600 group-hover:scale-110 transition-transform`}>
                     <item.icon size={20} />
@@ -126,92 +243,96 @@ const Sequences = () => {
               ))}
             </div>
             
-            <div className="mt-auto p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-800/50">
-              <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-2">
+            <div className="mt-auto p-5 bg-blue-50 dark:bg-blue-900/10 rounded-3xl border border-blue-100 dark:border-blue-800/50">
+              <p className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2">
                 <Target size={14} /> Builder Tip
               </p>
-              <p className="text-[10px] text-blue-600 dark:text-blue-500 mt-2 leading-relaxed">
-                Add a 'Wait' step between every outreach to maintain high deliverability and health scores.
+              <p className="text-[10px] text-blue-600 dark:text-blue-500 mt-2 leading-relaxed font-medium">
+                Add a 'Wait' step between every outreach to maintain high deliverability and account health.
               </p>
             </div>
           </div>
 
           {/* Canvas */}
-          <div className="flex-1 bg-slate-100/30 dark:bg-slate-900/20 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[40px] p-12 overflow-y-auto custom-scrollbar flex flex-col items-center">
+          <div className="flex-1 bg-slate-100/30 dark:bg-slate-900/20 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[48px] p-12 overflow-y-auto custom-scrollbar flex flex-col items-center">
             {customSteps.length === 0 ? (
-              <div className="my-auto text-center">
-                <div className="w-20 h-20 bg-white dark:bg-slate-900 rounded-[30px] shadow-xl flex items-center justify-center mx-auto mb-6">
-                  <Plus size={32} className="text-slate-300" />
+              <div className="my-auto text-center animate-in zoom-in-95">
+                <div className="w-24 h-24 bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl flex items-center justify-center mx-auto mb-8 border border-slate-100 dark:border-slate-800">
+                  <Plus size={40} className="text-slate-300" strokeWidth={3} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Canvas is empty</h3>
-                <p className="text-sm text-slate-500 max-w-xs mt-2">Choose a step from the left palette to start building your sequence.</p>
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Canvas is empty</h3>
+                <p className="text-sm text-slate-500 max-w-xs mt-2 font-medium">Choose a step from the palette to build your automated funnel.</p>
               </div>
             ) : (
-              <div className="w-full max-w-2xl space-y-4">
+              <div className="w-full max-w-2xl space-y-6">
                 {customSteps.map((step, idx) => (
-                  <div key={step.id} className="relative flex flex-col items-center">
+                  <div key={step.id} className="relative flex flex-col items-center animate-in slide-in-from-top-4">
                     {idx > 0 && (
-                      <div className="h-10 w-px bg-slate-300 dark:bg-slate-700 relative">
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-1 bg-white dark:bg-slate-950 rounded-full border border-slate-200 dark:border-slate-800 text-slate-300">
+                      <div className="h-12 w-px bg-slate-300 dark:bg-slate-700 relative">
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-1.5 bg-white dark:bg-slate-950 rounded-full border border-slate-200 dark:border-slate-800 text-slate-400 shadow-sm">
                           <ArrowRight size={10} className="rotate-90" />
                         </div>
                       </div>
                     )}
-                    <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 font-bold border border-slate-100 dark:border-slate-700">
+                    <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-[40px] shadow-sm hover:shadow-xl hover:border-blue-500 transition-all group relative">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-5">
+                          <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-slate-400 font-black border border-slate-100 dark:border-slate-700 shadow-inner">
                             {idx + 1}
                           </div>
                           <div>
-                            <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <h4 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                               {STEP_TYPES.find(t => t.type === step.type)?.icon && 
-                                React.createElement(STEP_TYPES.find(t => t.type === step.type)!.icon, { size: 18 })}
+                                React.createElement(STEP_TYPES.find(t => t.type === step.type)!.icon, { size: 22 })}
                               {step.type} Step
                             </h4>
-                            <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Configuration</p>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mt-0.5">Configuration</p>
                           </div>
                         </div>
-                        <button 
-                          onClick={() => removeStep(step.id)}
-                          className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => removeStep(step.id)}
+                            className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl transition-all"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        </div>
                       </div>
 
                       {step.type === 'Wait' ? (
-                        <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                          <Clock size={18} className="text-amber-500" />
-                          <span className="text-sm font-semibold">Wait for</span>
-                          <input type="number" defaultValue={step.config.days} className="w-16 px-2 py-1 rounded-lg border bg-white dark:bg-slate-900 text-center font-bold" />
-                          <span className="text-sm font-semibold">days</span>
+                        <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 border-dashed">
+                          <Clock size={24} className="text-amber-500" />
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter">Wait for</span>
+                            <input type="number" defaultValue={step.config.days} className="w-20 py-2 rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center font-black text-blue-600 outline-none focus:border-blue-500 transition-all" />
+                            <span className="text-sm font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter">days</span>
+                          </div>
                           <div className="flex-1"></div>
-                          <div className="flex items-center gap-2 text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full">
+                          <div className="flex items-center gap-2 text-[10px] font-black text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-full border border-blue-100 dark:border-blue-800/50">
                             <GitBranch size={12} /> {step.condition || 'IF NO REPLY'}
                           </div>
                         </div>
                       ) : (
                         <div className="space-y-4">
                            {step.config.subject !== undefined && (
-                            <div className="bg-slate-50 dark:bg-slate-950 px-4 py-2 rounded-xl border border-slate-100 dark:border-slate-800 mb-2">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase mr-2">Subject:</span>
-                              <input defaultValue={step.config.subject} className="bg-transparent border-none outline-none text-sm w-full font-medium" placeholder="Email Subject" />
+                            <div className="bg-slate-50 dark:bg-slate-950 px-6 py-4 rounded-[32px] border border-slate-100 dark:border-slate-800 mb-2 flex items-center shadow-inner">
+                              <span className="text-[10px] font-black text-slate-400 uppercase mr-4 tracking-widest shrink-0">Subject:</span>
+                              <input defaultValue={step.config.subject} className="bg-transparent border-none outline-none text-sm w-full font-bold text-slate-700 dark:text-slate-300" placeholder="e.g. Quick question for {{first_name}}" />
                             </div>
                            )}
-                          <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                          <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-inner">
                             <textarea 
                               defaultValue={step.config.content}
                               placeholder={`Compose your ${step.type} message...`}
-                              className="w-full bg-transparent border-none outline-none text-sm min-h-[80px] resize-none leading-relaxed"
+                              className="w-full bg-transparent border-none outline-none text-sm min-h-[120px] resize-none leading-relaxed font-medium text-slate-600 dark:text-slate-300 custom-scrollbar"
                             />
-                            <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                              <div className="flex gap-1.5">
-                                <button className="text-[10px] font-bold px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500">{"{{first_name}}"}</button>
-                                <button className="text-[10px] font-bold px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500">{"{{company}}"}</button>
+                            <div className="flex items-center justify-between mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
+                              <div className="flex gap-2">
+                                <button className="text-[10px] font-black px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 hover:text-blue-600 transition-colors uppercase tracking-tighter">{"{{first_name}}"}</button>
+                                <button className="text-[10px] font-black px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 hover:text-blue-600 transition-colors uppercase tracking-tighter">{"{{company}}"}</button>
                               </div>
-                              <button className="flex items-center gap-1.5 text-[10px] font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-2.5 py-1 rounded-lg transition-colors">
-                                <Sparkles size={12} /> AI REWRITE
+                              <button className="flex items-center gap-2 text-[10px] font-black text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded-2xl transition-all uppercase tracking-widest border border-blue-100 dark:border-blue-800">
+                                <Sparkles size={14} /> AI REWRITE
                               </button>
                             </div>
                           </div>
@@ -221,17 +342,17 @@ const Sequences = () => {
                   </div>
                 ))}
                 
-                <div className="flex flex-col items-center pt-8">
-                  <div className="h-10 w-px bg-slate-200 dark:bg-slate-800 border-dashed mb-4"></div>
-                  <div className="flex gap-3">
+                <div className="flex flex-col items-center pt-12 animate-in fade-in">
+                  <div className="h-12 w-px bg-slate-200 dark:bg-slate-800 border-dashed mb-6"></div>
+                  <div className="flex gap-4 p-2 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-xl">
                     {STEP_TYPES.map(s => (
                       <button 
                         key={s.type}
                         onClick={() => addStep(s.type)}
-                        className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400 hover:text-blue-600 hover:border-blue-500 transition-all shadow-sm"
+                        className="p-5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[28px] text-slate-400 hover:text-blue-600 hover:border-blue-500 hover:shadow-lg transition-all group"
                         title={`Add ${s.type}`}
                       >
-                        <s.icon size={20} />
+                        <s.icon size={28} className="group-hover:scale-110 transition-transform" />
                       </button>
                     ))}
                   </div>

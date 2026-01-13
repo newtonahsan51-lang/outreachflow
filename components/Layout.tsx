@@ -5,7 +5,8 @@ import {
   LayoutDashboard, Users, Send, Mail, FileText, 
   Workflow, Sparkles, Kanban, BarChart3, Users2, 
   Settings, CreditCard, LogOut, Menu, X, Sun, Moon,
-  Layers, ChevronRight, Search, Bell, ShieldAlert
+  Layers, ChevronRight, Search, Bell, ShieldAlert,
+  ShieldCheck, Activity
 } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, path, active }: any) => (
@@ -42,6 +43,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { icon: Sparkles, label: 'AI Writer', path: '/ai-writer' },
     { icon: Kanban, label: 'CRM', path: '/crm' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+    { icon: ShieldCheck, label: 'Deliverability', path: '/deliverability' },
     { icon: Users2, label: 'Team', path: '/team' },
     { icon: Layers, label: 'Integrations', path: '/integrations' },
     { icon: CreditCard, label: 'Billing', path: '/billing' },

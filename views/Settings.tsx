@@ -1,13 +1,14 @@
 
 import React, { useState } from 'react';
 import { 
-  User, Users, Globe, Shield, Bell, Key, Webhook, 
+  User, Globe, Shield, Bell, Key, Webhook, 
   Trash2, Plus, CheckCircle2, AlertCircle, 
   ExternalLink, Copy, RefreshCw, FileText, 
   Link as LinkIcon, Save, Eye, X, Info, ClipboardCheck, Server,
   Lock, Smartphone, Monitor, Mail, Slack, Terminal, Play, 
   ShieldAlert, Settings as SettingsIcon, Check, Rocket, HelpCircle, ChevronRight,
-  Zap, ArrowRight, MousePointer2, Loader2
+  Zap, ArrowRight, MousePointer2, Loader2,
+  Users, ShieldCheck, UserMinus, Search, Activity
 } from 'lucide-react';
 
 const Settings = () => {
@@ -17,32 +18,81 @@ const Settings = () => {
     { id: '2', name: 'Development', key: 'pk_test_a19s...2l88', created: '2024-02-10', lastUsed: 'Yesterday' },
   ]);
   const [domains, setDomains] = useState([
-    { id: '1', name: 'growthflow.io', dkim: 'Verified', spf: 'Verified', dmarc: 'Verified', status: 'Active' },
-    { id: '2', name: 'outreach.growthflow.io', dkim: 'Pending', spf: 'Verified', dmarc: 'Missing', status: 'Warning' },
+    { 
+      id: '1', 
+      name: 'growthflow.io', 
+      dkim: 'Verified', 
+      spf: 'Verified', 
+      dmarc: 'Verified', 
+      status: 'Active',
+      records: {
+        spf: 'v=spf1 include:_spf.google.com ~all',
+        dkim: 'v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7...',
+        dmarc: 'v=DMARC1; p=quarantine; rua=mailto:dmarc@growthflow.io'
+      }
+    },
+    { 
+      id: '2', 
+      name: 'outreach.growthflow.io', 
+      dkim: 'Pending', 
+      spf: 'Verified', 
+      dmarc: 'Missing', 
+      status: 'Warning',
+      records: {
+        spf: 'v=spf1 include:_spf.google.com ~all',
+        dkim: 'v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3...',
+        dmarc: 'v=DMARC1; p=none; rua=mailto:admin@growthflow.io'
+      }
+    },
   ]);
   const [connectedGmails, setConnectedGmails] = useState([
     { id: '1', email: 'alex@growthflow.io', status: 'Active', lastSync: '2m ago' }
   ]);
-  const [webhooks, setWebhooks] = useState([
+  
+  // Webhooks State
+  const [webhooks, setWebhooks] = useState<any[]>([
     { id: '1', url: 'https://api.myagency.com/hooks/leads', events: ['reply.received', 'meeting.booked'], status: 'Active' }
   ]);
-  const [notificationSettings, setNotificationSettings] = useState({
-    email: { campaign_finished: true, daily_summary: true, security_alerts: true },
-    slack: { campaign_finished: false, daily_summary: true, security_alerts: true },
-    in_app: { campaign_finished: true, daily_summary: true, security_alerts: true }
+  const [isAddingWebhook, setIsAddingWebhook] = useState(false);
+  const [newWebhook, setNewWebhook] = useState({
+    url: '',
+    events: [] as string[]
   });
+
+  // Unsubscribe State
+  const [unsubscribeSettings, setUnsubscribeSettings] = useState({
+    linkText: 'Unsubscribe',
+    includeLink: true,
+    autoUnsubscribeOnReply: false
+  });
+  const [suppressionList, setSuppressionList] = useState([
+    { id: '1', email: 'spam-trap@competitor.com', addedAt: '2024-02-01' },
+    { id: '2', email: 'blocked-user@gmail.com', addedAt: '2024-02-15' },
+  ]);
+  const [newSuppressionEmail, setNewSuppressionEmail] = useState('');
 
   const [isAddingDomain, setIsAddingDomain] = useState(false);
   const [isConnectingGmail, setIsConnectingGmail] = useState(false);
-  const [isAddingWebhook, setIsAddingWebhook] = useState(false);
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
-  const [newKeyData, setNewKeyData] = useState<any>(null);
   
   const [newDomainName, setNewDomainName] = useState('');
   const [selectedDomain, setSelectedDomain] = useState<any>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [copySuccess, setCopySuccess] = useState<string | null>(null);
 
-  const [webhookForm, setWebhookForm] = useState({ url: '', events: [] as string[] });
+  const availableEvents = [
+    { id: 'lead.created', label: 'Lead Created', desc: 'Triggered when a new lead is added.' },
+    { id: 'email.opened', label: 'Email Opened', desc: 'Triggered when a recipient opens an email.' },
+    { id: 'reply.received', label: 'Reply Received', desc: 'Triggered when a lead replies to a sequence.' },
+    { id: 'meeting.booked', label: 'Meeting Booked', desc: 'Triggered when a calendar event is scheduled.' },
+    { id: 'unsubscribe.requested', label: 'Unsubscribe', desc: 'Triggered when a lead opts out.' }
+  ];
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopySuccess(id);
+    setTimeout(() => setCopySuccess(null), 2000);
+  };
 
   const generateApiKey = (name: string = "New Access Key") => {
     const key = 'sk_' + Math.random().toString(36).substr(2, 24);
@@ -54,7 +104,6 @@ const Settings = () => {
       lastUsed: 'Never'
     };
     setApiKeys([newKey, ...apiKeys]);
-    setNewKeyData({ name, fullKey: key });
     setIsGeneratingKey(false);
   };
 
@@ -72,38 +121,6 @@ const Settings = () => {
     }, 2000);
   };
 
-  const revokeApiKey = (id: string) => {
-    if (confirm("Are you sure you want to revoke this API key?")) {
-      setApiKeys(apiKeys.filter(k => k.id !== id));
-    }
-  };
-
-  const handleAddWebhook = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newHook = {
-      id: Math.random().toString(36).substr(2, 9),
-      url: webhookForm.url,
-      events: webhookForm.events.length > 0 ? webhookForm.events : ['all'],
-      status: 'Active'
-    };
-    setWebhooks([...webhooks, newHook]);
-    setIsAddingWebhook(false);
-    setWebhookForm({ url: '', events: [] });
-  };
-
-  const deleteWebhook = (id: string) => {
-    setWebhooks(webhooks.filter(w => w.id !== id));
-  };
-
-  const toggleWebhookEvent = (event: string) => {
-    setWebhookForm(prev => ({
-      ...prev,
-      events: prev.events.includes(event) 
-        ? prev.events.filter(e => e !== event) 
-        : [...prev.events, event]
-    }));
-  };
-
   const handleAddDomain = (e: React.FormEvent) => {
     e.preventDefault();
     const newDomain = {
@@ -112,7 +129,12 @@ const Settings = () => {
       dkim: 'Pending',
       spf: 'Pending',
       dmarc: 'Pending',
-      status: 'Warning'
+      status: 'Warning',
+      records: {
+        spf: 'v=spf1 include:_spf.google.com ~all',
+        dkim: `v=DKIM1; k=rsa; p=${Math.random().toString(36).substring(2, 100)}`,
+        dmarc: 'v=DMARC1; p=none;'
+      }
     };
     setDomains([...domains, newDomain]);
     setNewDomainName('');
@@ -134,6 +156,42 @@ const Settings = () => {
         setSelectedDomain({ ...selectedDomain, dkim: 'Verified', spf: 'Verified', dmarc: 'Verified', status: 'Active' });
       }
     }, 2000);
+  };
+
+  const handleAddSuppression = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSuppressionEmail) return;
+    const newEntry = {
+      id: Math.random().toString(36).substr(2, 9),
+      email: newSuppressionEmail,
+      addedAt: new Date().toISOString().split('T')[0]
+    };
+    setSuppressionList([newEntry, ...suppressionList]);
+    setNewSuppressionEmail('');
+  };
+
+  const handleAddWebhook = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWebhook.url || newWebhook.events.length === 0) return;
+    const webhook = {
+      id: Math.random().toString(36).substr(2, 9),
+      url: newWebhook.url,
+      events: newWebhook.events,
+      status: 'Active'
+    };
+    setWebhooks([...webhooks, webhook]);
+    setNewWebhook({ url: '', events: [] });
+    setIsAddingWebhook(false);
+  };
+
+  const toggleWebhookStatus = (id: string) => {
+    setWebhooks(webhooks.map(wh => wh.id === id ? { ...wh, status: wh.status === 'Active' ? 'Inactive' : 'Active' } : wh));
+  };
+
+  const deleteWebhook = (id: string) => {
+    if (confirm("Are you sure you want to delete this webhook?")) {
+      setWebhooks(webhooks.filter(wh => wh.id !== id));
+    }
   };
 
   const renderQuickStart = () => (
@@ -208,56 +266,6 @@ const Settings = () => {
             </div>
           ))}
         </div>
-
-        {/* Specific Multi-Gmail Guide */}
-        <div className="bg-slate-900 rounded-[40px] p-10 text-white relative overflow-hidden shadow-2xl">
-          <div className="relative z-10">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
-              <img src="https://www.google.com/favicon.ico" className="w-6 h-6" alt="Gmail" />
-              একাধিক জিমেইল থেকে ইমেল পাঠানোর নিয়ম:
-            </h3>
-            
-            <div className="space-y-6">
-              <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 font-bold">১</div>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  প্রথমে <span className="text-white font-bold underline cursor-pointer" onClick={() => window.location.hash = '#/inboxes'}>Inboxes</span> সেকশনে গিয়ে আপনার সবগুলো জিমেইল এক এক করে কানেক্ট করুন।
-                </p>
-              </div>
-              <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 font-bold">২</div>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  ক্যাম্পেইন তৈরি করার সময় <span className="text-blue-400 font-bold">Sequence Builder</span> এ গিয়ে "Select Sending Accounts" অপশন থেকে আপনার সবগুলো জিমেইল সিলেক্ট করে দিন।
-                </p>
-              </div>
-              <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 font-bold">৩</div>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  সিস্টেম নিজে থেকেই একেকবার একেক জিমেইল ব্যবহার করে ইমেল পাঠাবে। এতে আপনার জিমেইল একাউন্ট সেফ থাকবে এবং ডেলিভারিবিলিটি বাড়বে।
-                </p>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => window.location.hash = '#/inboxes'}
-              className="mt-10 px-8 py-4 bg-white text-slate-900 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-blue-50 transition-all active:scale-95"
-            >
-              এখনই ইনবক্স কানেক্ট করুন <ArrowRight size={18} />
-            </button>
-          </div>
-          
-          <div className="absolute -bottom-10 -right-10 opacity-10 blur-2xl w-64 h-64 bg-blue-500 rounded-full"></div>
-        </div>
-
-        <div className="mt-8 p-6 bg-amber-50 dark:bg-amber-900/10 rounded-3xl border border-amber-100 dark:border-amber-800 flex items-start gap-4">
-          <Info className="text-amber-600 shrink-0 mt-0.5" size={24} />
-          <div>
-            <p className="text-sm text-amber-900 dark:text-amber-400 font-bold">গুরুত্বপূর্ণ টিপস:</p>
-            <p className="text-xs text-amber-800 dark:text-amber-500 mt-1 leading-relaxed">
-              প্রতিটি জিমেইল একাউন্ট থেকে দিনে ২৫-৫০টির বেশি ইমেল না পাঠানোই ভালো। অনেকগুলো জিমেইল কানেক্ট করলে আপনি খুব সহজেই দিনে ১০০০+ ইমেল পাঠাতে পারবেন কোনো রিস্ক ছাড়াই।
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -273,7 +281,6 @@ const Settings = () => {
             <button className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors">Remove</button>
           </div>
         </div>
-        
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-500 uppercase">First Name</label>
@@ -291,113 +298,53 @@ const Settings = () => {
   const renderDomains = () => (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2">
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-8">
           <div>
             <h3 className="text-lg font-bold">Sending Domains</h3>
             <p className="text-sm text-slate-500">Configure SPF, DKIM, and DMARC to improve deliverability.</p>
           </div>
           <button 
             onClick={() => setIsAddingDomain(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm transition-all active:scale-95"
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-blue-500/20"
           >
             <Plus size={18} /> Add Domain
           </button>
         </div>
-
         <div className="space-y-4">
           {domains.map(domain => (
-            <div key={domain.id} className="p-6 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl group hover:border-blue-500/50 transition-all">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${domain.status === 'Active' ? 'bg-green-500' : 'bg-amber-500'}`} />
-                  <span className="text-lg font-bold">{domain.name}</span>
+            <div key={domain.id} className="p-6 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[24px] group hover:border-blue-500/50 transition-all">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${domain.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'} border shadow-sm`}>
+                    <Globe size={24} />
+                  </div>
+                  <div>
+                    <span className="text-lg font-bold text-slate-900 dark:text-white">{domain.name}</span>
+                    <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                      {['spf', 'dkim', 'dmarc'].map((type) => (
+                        <div key={type} className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${domain[type as keyof typeof domain] === 'Verified' ? 'bg-emerald-500' : domain[type as keyof typeof domain] === 'Pending' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{type}:</span>
+                          <span className={`text-[10px] font-bold ${domain[type as keyof typeof domain] === 'Verified' ? 'text-emerald-600' : 'text-slate-500'}`}>
+                            {domain[type as keyof typeof domain]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => setSelectedDomain(domain)}
-                    className="text-sm font-bold text-blue-600 hover:underline flex items-center gap-1 transition-all"
-                  >
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setSelectedDomain(domain)} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-blue-600 hover:border-blue-500 transition-all shadow-sm">
                     <RefreshCw size={14} className={isVerifying && selectedDomain?.id === domain.id ? "animate-spin" : ""} /> 
                     {domain.status === 'Active' ? 'Re-verify' : 'Verify Domain'}
                   </button>
-                  <button className="text-slate-400 hover:text-red-500 transition-colors">
+                  <button className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm">
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* NEW: Gmail OAuth Section */}
-      <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center border border-slate-100 dark:border-slate-700 shadow-sm">
-              <img src="https://www.google.com/favicon.ico" className="w-6 h-6" alt="Google" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold">Google OAuth Accounts</h3>
-              <p className="text-sm text-slate-500">Connect Gmail accounts via secure OAuth for high-volume sending.</p>
-            </div>
-          </div>
-          <button 
-            onClick={handleConnectGmail}
-            disabled={isConnectingGmail}
-            className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 disabled:opacity-50"
-          >
-            {isConnectingGmail ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-            {isConnectingGmail ? 'Connecting...' : 'Connect Google Account'}
-          </button>
-        </div>
-
-        <div className="p-6 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-800/50 mb-8 flex items-start gap-4">
-          <Info className="text-blue-600 mt-1" size={20} />
-          <div className="space-y-1">
-            <p className="text-sm font-bold text-blue-900 dark:text-blue-300">OAuth Instructions</p>
-            <p className="text-xs text-blue-800/70 dark:text-blue-400/70 leading-relaxed">
-              Click the button above to authorize OutreachFlow via Google. For best deliverability, ensure you've enabled IMAP in your Gmail settings and use accounts associated with your verified sending domains.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {connectedGmails.length > 0 ? (
-            connectedGmails.map(acc => (
-              <div key={acc.id} className="p-5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between group transition-all hover:border-blue-500/50">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center">
-                    <Mail size={20} className="text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">{acc.email}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {acc.status}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">• Last Sync: {acc.lastSync}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-blue-500 transition-colors shadow-sm">
-                    <RefreshCw size={16} />
-                  </button>
-                  <button 
-                    onClick={() => setConnectedGmails(connectedGmails.filter(g => g.id !== acc.id))}
-                    className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-colors shadow-sm"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="py-8 text-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl">
-              <p className="text-sm text-slate-400">No Google accounts connected yet.</p>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -420,10 +367,181 @@ const Settings = () => {
                 <p className="text-sm font-bold">{key.name}</p>
                 <code className="text-xs text-slate-400">{key.key}</code>
               </div>
-              <button onClick={() => revokeApiKey(key.id)} className="text-red-500"><Trash2 size={18} /></button>
+              <button onClick={() => setApiKeys(apiKeys.filter(k => k.id !== key.id))} className="text-red-500"><Trash2 size={18} /></button>
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+
+  const renderUnsubscribe = () => (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
+        <div className="flex items-center gap-4 mb-8">
+          <div className="w-12 h-12 bg-rose-50 dark:bg-rose-900/20 text-rose-600 rounded-2xl flex items-center justify-center border border-rose-100 dark:border-rose-800">
+            <UserMinus size={24} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold">Unsubscribe Settings</h3>
+            <p className="text-sm text-slate-500">Customize how recipients opt-out of your sequences.</p>
+          </div>
+        </div>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl">
+            <div>
+              <p className="text-sm font-bold">Include Unsubscribe Link</p>
+              <p className="text-xs text-slate-500">Automatically append an opt-out link to all outgoing emails.</p>
+            </div>
+            <button 
+              onClick={() => setUnsubscribeSettings({...unsubscribeSettings, includeLink: !unsubscribeSettings.includeLink})}
+              className={`w-12 h-6 rounded-full relative transition-colors ${unsubscribeSettings.includeLink ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-800'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${unsubscribeSettings.includeLink ? 'right-1' : 'left-1'}`} />
+            </button>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unsubscribe Link Text</label>
+            <input 
+              type="text" 
+              value={unsubscribeSettings.linkText}
+              onChange={(e) => setUnsubscribeSettings({...unsubscribeSettings, linkText: e.target.value})}
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-sm" 
+            />
+          </div>
+          <div className="flex justify-end pt-2">
+            <button className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2">
+              <Save size={18} /> Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
+        <div className="flex items-center gap-4 mb-8">
+          <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-2xl flex items-center justify-center border border-slate-100 dark:border-slate-700">
+            <ShieldAlert size={24} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold">Global Suppression List</h3>
+            <p className="text-sm text-slate-500">Emails in this list will never be contacted.</p>
+          </div>
+        </div>
+        <form onSubmit={handleAddSuppression} className="flex gap-3 mb-8">
+          <input 
+            type="email" 
+            required
+            placeholder="e.g. support@competitor.com"
+            value={newSuppressionEmail}
+            onChange={(e) => setNewSuppressionEmail(e.target.value)}
+            className="flex-1 px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none text-sm" 
+          />
+          <button type="submit" className="px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-bold text-sm">Add Email</button>
+        </form>
+        <div className="space-y-3">
+          {suppressionList.map(item => (
+            <div key={item.id} className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-100 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold">{item.email}</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Added: {item.addedAt}</p>
+              </div>
+              <button onClick={() => setSuppressionList(suppressionList.filter(s => s.id !== item.id))} className="text-slate-300 hover:text-red-500"><Trash2 size={18} /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderWebhooks = () => (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-2xl flex items-center justify-center border border-blue-100 dark:border-blue-800">
+              <Webhook size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold">Webhooks Management</h3>
+              <p className="text-sm text-slate-500">Receive real-time data payloads on specific events.</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setIsAddingWebhook(true)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+          >
+            <Plus size={18} /> Create Webhook
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {webhooks.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 bg-slate-50 dark:bg-slate-950 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-800">
+              <Activity className="mx-auto mb-3 opacity-20" size={40} />
+              <p className="text-sm font-bold text-slate-500">No webhooks configured yet.</p>
+            </div>
+          ) : (
+            webhooks.map(wh => (
+              <div key={wh.id} className="p-6 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl group transition-all hover:border-blue-500/50">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`w-2 h-2 rounded-full ${wh.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{wh.url}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {wh.events.map((ev: string) => (
+                        <span key={ev} className="px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                          {ev}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => toggleWebhookStatus(wh.id)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                        wh.status === 'Active' 
+                        ? 'bg-white dark:bg-slate-800 text-slate-500 hover:text-amber-600' 
+                        : 'bg-blue-600 text-white border-blue-600'
+                      }`}
+                    >
+                      {wh.status === 'Active' ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button 
+                      onClick={() => deleteWebhook(wh.id)}
+                      className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="p-8 bg-slate-900 rounded-[32px] text-white relative overflow-hidden shadow-xl">
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="max-w-md">
+            <h3 className="text-xl font-bold mb-3 flex items-center gap-3">
+              <Terminal className="text-blue-400" /> Webhook Security
+            </h3>
+            <p className="text-sm text-slate-300 leading-relaxed mb-6">
+              Use this signing secret to verify incoming payloads.
+            </p>
+            <div className="flex gap-2">
+              <input readOnly value="whsec_82jks92k...l2p" className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono text-blue-200 outline-none" />
+              <button onClick={() => copyToClipboard('whsec_82jks92kl2p', 'secret')} className="px-4 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all">
+                {copySuccess === 'secret' ? <Check size={18} /> : <Copy size={18} />}
+              </button>
+            </div>
+          </div>
+          <div className="hidden lg:block opacity-20">
+            <Webhook size={120} />
+          </div>
+        </div>
+        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px]"></div>
       </div>
     </div>
   );
@@ -433,7 +551,7 @@ const Settings = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Workspace Settings</h1>
-          <p className="text-slate-500 dark:text-slate-400">আপনার ব্যক্তিগত ও ওয়ার্কস্পেস সেটিংস এখান থেকে কন্ট্রোল করুন।</p>
+          <p className="text-slate-500 dark:text-slate-400">Manage your personal and workspace configurations.</p>
         </div>
       </div>
 
@@ -444,7 +562,7 @@ const Settings = () => {
             { icon: User, label: 'Profile' },
             { icon: Globe, label: 'Domains' },
             { icon: Key, label: 'API Keys' },
-            { icon: LinkIcon, label: 'Unsubscribe' },
+            { icon: UserMinus, label: 'Unsubscribe' },
             { icon: Webhook, label: 'Webhooks' },
           ].map((item) => (
             <button 
@@ -462,52 +580,120 @@ const Settings = () => {
           {activeTab === 'Profile' && renderProfile()}
           {activeTab === 'Domains' && renderDomains()}
           {activeTab === 'API Keys' && renderAPIKeys()}
-          {['Unsubscribe', 'Webhooks'].includes(activeTab) && (
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400">
-               <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                 <SettingsIcon size={32} />
-               </div>
-               <h3 className="text-lg font-bold">{activeTab} Section</h3>
-               <p className="text-sm mt-2">Coming in the next update.</p>
-             </div>
-          )}
+          {activeTab === 'Unsubscribe' && renderUnsubscribe()}
+          {activeTab === 'Webhooks' && renderWebhooks()}
         </div>
       </div>
 
-      {/* NEW: Add Domain Modal */}
+      {/* Add Domain Modal */}
       {isAddingDomain && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95">
              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-xl font-bold">Add Sending Domain</h2>
               <button onClick={() => setIsAddingDomain(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20}/></button>
             </div>
             <form onSubmit={handleAddDomain} className="p-8 space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Domain Name</label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-3 text-slate-400" size={18} />
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="e.g. outreach.com"
-                    value={newDomainName}
-                    onChange={(e) => setNewDomainName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
-                  />
-                </div>
-              </div>
-              <button 
-                type="submit" 
-                className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95"
-              >
-                Add Domain
-              </button>
+              <input 
+                type="text" 
+                required
+                placeholder="e.g. outreach.com"
+                value={newDomainName}
+                onChange={(e) => setNewDomainName(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none" 
+              />
+              <button type="submit" className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold">Add Domain</button>
             </form>
           </div>
         </div>
       )}
 
+      {/* Add Webhook Modal */}
+      {isAddingWebhook && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95">
+             <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h2 className="text-xl font-bold">Configure New Webhook</h2>
+              <button onClick={() => setIsAddingWebhook(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20}/></button>
+            </div>
+            <form onSubmit={handleAddWebhook} className="p-8 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Endpoint URL</label>
+                <input 
+                  type="url" 
+                  required
+                  placeholder="https://your-api.com/webhooks"
+                  value={newWebhook.url}
+                  onChange={(e) => setNewWebhook({ ...newWebhook, url: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm outline-none" 
+                />
+              </div>
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Select Events</label>
+                <div className="space-y-2">
+                  {availableEvents.map(ev => (
+                    <label key={ev.id} className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 rounded-2xl cursor-pointer hover:border-blue-500 transition-all">
+                      <input 
+                        type="checkbox" 
+                        className="mt-1"
+                        checked={newWebhook.events.includes(ev.id)}
+                        onChange={(e) => {
+                          const updated = e.target.checked 
+                            ? [...newWebhook.events, ev.id] 
+                            : newWebhook.events.filter(id => id !== ev.id);
+                          setNewWebhook({ ...newWebhook, events: updated });
+                        }}
+                      />
+                      <div>
+                        <p className="text-sm font-bold">{ev.label}</p>
+                        <p className="text-[10px] text-slate-500">{ev.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <button type="submit" disabled={!newWebhook.url || newWebhook.events.length === 0} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold disabled:opacity-50">Create Webhook</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Verify Domain Modal */}
+      {selectedDomain && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col">
+            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h2 className="text-xl font-bold">Verify {selectedDomain.name}</h2>
+              <button onClick={() => setSelectedDomain(null)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20} /></button>
+            </div>
+            <div className="p-8 overflow-y-auto custom-scrollbar space-y-6">
+              {['spf', 'dkim', 'dmarc'].map(type => (
+                <div key={type} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">{type} Record (TXT)</h4>
+                    {selectedDomain[type] === 'Verified' && <span className="text-[10px] font-bold text-emerald-600">VERIFIED</span>}
+                  </div>
+                  <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-2xl flex flex-col gap-2">
+                    <code className="text-xs font-mono break-all">{selectedDomain.records[type]}</code>
+                    <button onClick={() => copyToClipboard(selectedDomain.records[type], type)} className="self-end text-blue-600 font-bold text-[10px] flex items-center gap-1">
+                      {copySuccess === type ? <Check size={10}/> : <Copy size={10}/>} {copySuccess === type ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-8 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-4">
+              <button onClick={() => setSelectedDomain(null)} className="px-6 py-2.5 text-sm font-bold text-slate-500">Close</button>
+              <button onClick={simulateVerification} disabled={isVerifying} className="px-8 py-2.5 bg-blue-600 text-white rounded-2xl text-sm font-bold flex items-center gap-2">
+                {isVerifying ? <RefreshCw size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+                {isVerifying ? 'Verifying...' : 'Verify Records'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API Key Modal */}
       {isGeneratingKey && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95">
@@ -516,40 +702,8 @@ const Settings = () => {
               <button onClick={() => setIsGeneratingKey(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20}/></button>
             </div>
             <div className="p-8 space-y-6">
-              <input 
-                id="keyLabel"
-                type="text" 
-                placeholder="e.g. CRM Integration"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl" 
-              />
-              <button 
-                onClick={() => generateApiKey((document.getElementById('keyLabel') as HTMLInputElement).value)}
-                className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold"
-              >
-                Create API Key
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {selectedDomain && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <h2 className="text-xl font-bold">Verify {selectedDomain.name}</h2>
-              <button onClick={() => setSelectedDomain(null)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={20}/></button>
-            </div>
-            <div className="p-8 space-y-8">
-              <p className="text-sm text-slate-500">Add DNS records to your provider.</p>
-              <button 
-                onClick={simulateVerification}
-                disabled={isVerifying}
-                className="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center gap-2"
-              >
-                {isVerifying ? <RefreshCw size={18} className="animate-spin" /> : <Check size={18} />}
-                {isVerifying ? 'Verifying...' : 'Check Records'}
-              </button>
+              <input id="keyLabel" type="text" placeholder="e.g. CRM Integration" className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 rounded-2xl outline-none" />
+              <button onClick={() => generateApiKey((document.getElementById('keyLabel') as HTMLInputElement).value)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold">Create API Key</button>
             </div>
           </div>
         </div>
